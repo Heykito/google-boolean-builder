@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operador Booleano — Constructor de búsquedas de Google</title>
+<meta name="description" content="Constructor local de URLs de búsqueda de Google con operadores booleanos avanzados. Sin backend, sin dependencias.">
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --muted:#5d6470;
+    --line:#dfe3ea; --accent:#1a56db; --accent-ink:#ffffff;
+    --code-bg:#0f1420; --code-ink:#d8e2f2;
+    --warn-bg:#fff4e5; --warn-ink:#8a4b00; --warn-line:#f0c48a;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1116; --panel:#161a21; --ink:#e8ecf3; --muted:#9aa3b2;
+      --line:#2a3039; --accent:#3b82f6; --accent-ink:#0b0e13;
+      --code-bg:#0a0d13; --code-ink:#cfe0f7;
+      --warn-bg:#3a2a10; --warn-ink:#f2c98a; --warn-line:#6b4d1c;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 64px}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{margin:0 0 20px;color:var(--muted)}
+  fieldset{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+    padding:16px;margin:0 0 16px}
+  legend{padding:0 8px;font-weight:600;font-size:.85rem;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--muted)}
+  label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+  input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;
+    background:var(--bg);color:var(--ink);font:inherit;font-size:.92rem}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .grid{display:grid;gap:12px}
+  .kw-row{display:grid;grid-template-columns:1fr 190px;gap:10px;align-items:end}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+  @media (max-width:640px){
+    .kw-row,.cols-3{grid-template-columns:1fr}
+  }
+  .hint{font-size:.75rem;color:var(--muted);font-weight:400;margin-top:4px}
+  #preview-wrap{position:sticky;bottom:0;background:var(--bg);padding-top:8px}
+  pre{margin:0 0 10px;background:var(--code-bg);color:var(--code-ink);padding:14px;
+    border-radius:var(--radius);overflow-x:auto;white-space:pre-wrap;word-break:break-word;
+    font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;min-height:22px}
+  pre .ph{color:var(--muted)}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  button{padding:10px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--accent)}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #warnings{list-style:none;margin:0 0 10px;padding:0}
+  #warnings li{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);
+    border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:.85rem}
+  #warnings:empty{display:none}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(16px);
+    background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:.85rem;
+    opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  footer{margin-top:24px;font-size:.8rem;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Operador Booleano</h1>
+  <p>Construye búsquedas de Google precisas con operadores avanzados. Todo se ejecuta en tu navegador.</p>
+</header>
+
+<form id="form" autocomplete="off">
+
+  <fieldset>
+    <legend>Palabras clave</legend>
+    <div class="grid" id="keywords">
+      <div class="kw-row">
+        <div>
+          <label for="kw1">Palabra clave 1</label>
+          <input id="kw1" data-kw type="text" placeholder="ej. ciberseguridad">
+        </div>
+        <div>
+          <label for="kw1m">Modo</label>
+          <select id="kw1m" data-kwmode>
+            <option value="and">Obligatoria (AND)</option>
+            <option value="or">Alguna (OR)</option>
+            <option value="not">Excluir (−)</option>
+          </select>
+        </div>
+      </div>
+      <div class="kw-row">
+        <div>
+          <label for="kw2">Palabra clave 2</label>
+          <input id="kw2" data-kw type="text" placeholder="ej. auditoría">
+        </div>
+        <div>
+          <label for="kw2m">Modo</label>
+          <select id="kw2m" data-kwmode>
+            <option value="and">Obligatoria (AND)</option>
+            <option value="or">Alguna (OR)</option>
+            <option value="not">Excluir (−)</option>
+          </select>
+        </div>
+      </div>
+      <div class="kw-row">
+        <div>
+          <label for="kw3">Palabra clave 3</label>
+          <input id="kw3" data-kw type="text" placeholder="ej. informe">
+        </div>
+        <div>
+          <label for="kw3m">Modo</label>
+          <select id="kw3m" data-kwmode>
+            <option value="and">Obligatoria (AND)</option>
+            <option value="or">Alguna (OR)</option>
+            <option value="not">Excluir (−)</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="phrase">Frase exacta</label>
+        <input id="phrase" type="text" placeholder="ej. gestión de incidentes">
+        <p class="hint">Se envuelve en comillas: Google buscará esa secuencia literal.</p>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Filtros de contenido</legend>
+    <div class="grid cols-3">
+      <div>
+        <label for="filetype">Formato de archivo</label>
+        <select id="filetype">
+          <option value="">Cualquiera</option>
+          <option value="pdf">PDF</option>
+          <option value="doc OR filetype:docx" data-raw="1">DOC / DOCX</option>
+          <option value="xls OR filetype:xlsx" data-raw="1">XLS / XLSX</option>
+          <option value="ppt OR filetype:pptx" data-raw="1">PPT / PPTX</option>
+          <option value="txt">TXT</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+      <div>
+        <label for="intitle">Título contiene</label>
+        <input id="intitle" type="text" placeholder="ej. manual">
+      </div>
+      <div>
+        <label for="inurl">URL contiene</label>
+        <input id="inurl" type="text" placeholder="ej. /docs/">
+      </div>
+      <div>
+        <label for="site">Sitio o dominio</label>
+        <input id="site" type="text" placeholder="ej. wikipedia.org o .gov">
+      </div>
+      <div>
+        <label for="xsite">Excluir sitio</label>
+        <input id="xsite" type="text" placeholder="ej. pinterest.com">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Fecha, idioma y región</legend>
+    <div class="grid cols-3">
+      <div>
+        <label for="date">Rango de fechas</label>
+        <select id="date">
+          <option value="">Cualquier fecha</option>
+          <option value="d">Últimas 24 horas</option>
+          <option value="w">Última semana</option>
+          <option value="m">Último mes</option>
+          <option value="y">Último año</option>
+          <option value="custom">Personalizado…</option>
+        </select>
+      </div>
+      <div>
+        <label for="lang">Idioma</label>
+        <select id="lang">
+          <option value="">Cualquiera</option>
+          <option value="lang_es">Español</option>
+          <option value="lang_en">Inglés</option>
+          <option value="lang_fr">Francés</option>
+          <option value="lang_pt">Portugués</option>
+        </select>
+      </div>
+      <div>
+        <label for="region">Región</label>
+        <select id="region">
+          <option value="">Cualquiera</option>
+          <option value="countryES">España</option>
+          <option value="countryMX">México</option>
+          <option value="countryAR">Argentina</option>
+          <option value="countryCO">Colombia</option>
+          <option value="countryCU">Cuba</option>
+          <option value="countryUS">Estados Unidos</option>
+          <option value="countryGB">Reino Unido</option>
+          <option value="countryFR">Francia</option>
+          <option value="countryBR">Brasil</option>
+        </select>
+      </div>
+      <div id="from-wrap" hidden>
+        <label for="from">Desde</label>
+        <input id="from" type="date">
+      </div>
+      <div id="to-wrap" hidden>
+        <label for="to">Hasta</label>
+        <input id="to" type="date">
+      </div>
+    </div>
+  </fieldset>
+</form>
+
+<div id="preview-wrap">
+  <ul id="warnings" aria-live="polite"></ul>
+  <pre id="preview" aria-live="polite"></pre>
+  <div class="actions">
+    <button type="button" id="btn-search" class="primary">Buscar en Google</button>
+    <button type="button" id="btn-copy-query">Copiar query</button>
+    <button type="button" id="btn-copy-url">Copiar URL</button>
+    <button type="button" id="btn-reset">Limpiar</button>
+  </div>
+</div>
+
+<footer>Operador Booleano · 100&nbsp;% local, sin backend ni dependencias.</footer>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  function $(id) { return document.getElementById(id); }
+
+  /* ------------------------------------------------------------------
+   * Utilidades de sintaxis
+   * ---------------------------------------------------------------- */
+
+  // Google trata el espacio como AND implícito: un término con espacios
+  // debe ir entrecomillado o se partiría en varios términos sueltos.
+  function quoteIfNeeded(term) {
+    return /\s/.test(term) ? '"' + term.replace(/"/g, '') + '"' : term;
+  }
+
+  function val(id) { return $(id).value.trim(); }
+
+  // "2026-09-06" (input[type=date]) -> "9/6/2026", formato que espera
+  // el parámetro cd_min / cd_max de Google.
+  function toGoogleDate(iso) {
+    var p = iso.split('-');
+    if (p.length !== 3) return '';
+    return Number(p[1]) + '/' + Number(p[2]) + '/' + p[0];
+  }
+
+  /* ------------------------------------------------------------------
+   * Lectura del formulario
+   * ---------------------------------------------------------------- */
+
+  function readState() {
+    var inputs = document.querySelectorAll('[data-kw]');
+    var modes = document.querySelectorAll('[data-kwmode]');
+    var keywords = [];
+
+    for (var i = 0; i < inputs.length; i++) {
+      var term = inputs[i].value.trim();
+      if (term) keywords.push({ term: term, mode: modes[i].value });
+    }
+
+    var ftSelect = $('filetype');
+    var ftOption = ftSelect.options[ftSelect.selectedIndex];
+
+    return {
+      keywords: keywords,
+      phrase: val('phrase'),
+      filetype: ftSelect.value,
+      filetypeIsRaw: ftOption ? ftOption.dataset.raw === '1' : false,
+      site: val('site'),
+      excludeSite: val('xsite'),
+      intitle: val('intitle'),
+      inurl: val('inurl'),
+      date: $('date').value,
+      from: $('from').value,
+      to: $('to').value,
+      lang: $('lang').value,
+      region: $('region').value
+    };
+  }
+
+  /* ------------------------------------------------------------------
+   * Construcción de la query (texto plano, sin codificar)
+   * ---------------------------------------------------------------- */
+
+  function buildQuery(s) {
+    var parts = [];
+    var ors = [];
+
+    s.keywords.forEach(function (k) {
+      var t = quoteIfNeeded(k.term);
+      if (k.mode === 'and') parts.push(t);
+      else if (k.mode === 'or') ors.push(t);
+      else if (k.mode === 'not') parts.push('-' + t);
+    });
+
+    // OR tiene mayor precedencia que el AND implícito, de ahí el
+    // paréntesis. Con un solo término el grupo sobra.
+    if (ors.length === 1) parts.push(ors[0]);
+    else if (ors.length > 1) parts.push('(' + ors.join(' OR ') + ')');
+
+    if (s.phrase) parts.push('"' + s.phrase.replace(/"/g, '') + '"');
+    if (s.intitle) parts.push('intitle:' + quoteIfNeeded(s.intitle));
+    if (s.inurl) parts.push('inurl:' + quoteIfNeeded(s.inurl));
+    if (s.site) parts.push('site:' + s.site);
+    if (s.excludeSite) parts.push('-site:' + s.excludeSite);
+
+    // Las variantes multi-extensión ya llevan su propio "OR filetype:…",
+    // así que se agrupan para no colisionar con el AND implícito.
+    if (s.filetype) {
+      parts.push(s.filetypeIsRaw
+        ? '(filetype:' + s.filetype + ')'
+        : 'filetype:' + s.filetype);
+    }
+
+    return parts.join(' ');
+  }
+
+  /* ------------------------------------------------------------------
+   * Construcción de la URL final
+   * ---------------------------------------------------------------- */
+
+  function buildTbs(s) {
+    if (!s.date) return '';
+    if (s.date !== 'custom') return 'qdr:' + s.date;
+    var min = s.from ? toGoogleDate(s.from) : '';
+    var max = s.to ? toGoogleDate(s.to) : '';
+    if (!min && !max) return '';
+    return 'cdr:1,cd_min:' + min + ',cd_max:' + max;
+  }
+
+  function buildURL(s, query) {
+    var params = ['q=' + encodeURIComponent(query)];
+    var tbs = buildTbs(s);
+    if (tbs) params.push('tbs=' + encodeURIComponent(tbs));
+    if (s.lang) params.push('lr=' + encodeURIComponent(s.lang));
+    if (s.region) params.push('cr=' + encodeURIComponent(s.region));
+    return 'https://www.google.com/search?' + params.join('&');
+  }
+
+  /* ------------------------------------------------------------------
+   * Validación de conflictos lógicos
+   * ------------------------------------------------------------------
+   * Detecta combinaciones que darían cero resultados o que contradicen
+   * la intención del usuario. Devuelve mensajes legibles; un array
+   * vacío significa "sin conflictos".
+   *
+   * @param {{term:string, mode:'and'|'or'|'not'}[]} keywords
+   * @param {string} phrase       frase exacta (sin comillas)
+   * @param {string} site         dominio incluido con site:
+   * @param {string} excludeSite  dominio excluido con -site:
+   * @returns {string[]} advertencias a mostrar al usuario
+   */
+  function findConflicts(keywords, phrase, site, excludeSite) {
+    // TODO(usuario): implementar la política de validación.
+    //
+    // Casos candidatos (decide cuáles importan y con qué rigor):
+    //   · Mismo término marcado como obligatorio (AND) y como excluido (−).
+    //   · Un término excluido que aparece dentro de la frase exacta.
+    //   · site: y -site: con el mismo dominio.
+    //   · Duplicados exactos entre las tres palabras clave.
+    //
+    // Trade-offs: ¿comparar tal cual o normalizando con toLowerCase()?
+    // ¿coincidencia exacta o por subcadena (más avisos, más falsos
+    // positivos)? ¿solo advertir, o además bloquear la búsqueda?
+    return [];
+  }
+
+  /* ------------------------------------------------------------------
+   * Render
+   * ---------------------------------------------------------------- */
+
+  var current = { query: '', url: '' };
+
+  function render() {
+    var s = readState();
+    var query = buildQuery(s);
+    var pre = $('preview');
+
+    current.query = query;
+    current.url = query ? buildURL(s, query) : '';
+
+    if (query) {
+      pre.textContent = query;
+    } else {
+      pre.innerHTML = '<span class="ph">La query aparecerá aquí…</span>';
+    }
+
+    var list = $('warnings');
+    list.innerHTML = '';
+    findConflicts(s.keywords, s.phrase, s.site, s.excludeSite).forEach(function (msg) {
+      var li = document.createElement('li');
+      li.textContent = '⚠ ' + msg;
+      list.appendChild(li);
+    });
+
+    var empty = !query;
+    $('btn-search').disabled = empty;
+    $('btn-copy-query').disabled = empty;
+    $('btn-copy-url').disabled = empty;
+
+    var custom = s.date === 'custom';
+    $('from-wrap').hidden = !custom;
+    $('to-wrap').hidden = !custom;
+  }
+
+  /* ------------------------------------------------------------------
+   * Acciones
+   * ---------------------------------------------------------------- */
+
+  var toastTimer;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch (e) { toast('No se pudo copiar'); }
+    document.body.removeChild(ta);
+  }
+
+  function copy(text, label) {
+    if (!text) return;
+    var done = function () { toast(label + ' copiado'); };
+    // file:// no es un contexto seguro, así que la Clipboard API no está
+    // disponible al abrir el HTML directamente: se cae a execCommand.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+
+  $('form').addEventListener('input', render);
+  $('form').addEventListener('change', render);
+  $('form').addEventListener('submit', function (e) { e.preventDefault(); });
+
+  $('btn-search').addEventListener('click', function () {
+    if (current.url) window.open(current.url, '_blank', 'noopener');
+  });
+  $('btn-copy-query').addEventListener('click', function () { copy(current.query, 'Query'); });
+  $('btn-copy-url').addEventListener('click', function () { copy(current.url, 'URL'); });
+  $('btn-reset').addEventListener('click', function () { $('form').reset(); render(); });
+
+  // Enter en cualquier campo de texto lanza la búsqueda.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+      e.preventDefault();
+      $('btn-search').click();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
