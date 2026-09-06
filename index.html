@@ -360,18 +360,43 @@
    * @returns {string[]} advertencias a mostrar al usuario
    */
   function findConflicts(keywords, phrase, site, excludeSite) {
-    // TODO(usuario): implementar la política de validación.
-    //
-    // Casos candidatos (decide cuáles importan y con qué rigor):
-    //   · Mismo término marcado como obligatorio (AND) y como excluido (−).
-    //   · Un término excluido que aparece dentro de la frase exacta.
-    //   · site: y -site: con el mismo dominio.
-    //   · Duplicados exactos entre las tres palabras clave.
-    //
-    // Trade-offs: ¿comparar tal cual o normalizando con toLowerCase()?
-    // ¿coincidencia exacta o por subcadena (más avisos, más falsos
-    // positivos)? ¿solo advertir, o además bloquear la búsqueda?
-    return [];
+    var warnings = [];
+    var norm = function (s) { return s.toLowerCase(); };
+
+    // Keyword vs. keyword: comparación exacta y normalizada. Una
+    // coincidencia por subcadena aquí generaría demasiados falsos
+    // positivos ("mesa" dentro de "mesada" no es el mismo término).
+    for (var i = 0; i < keywords.length; i++) {
+      for (var j = i + 1; j < keywords.length; j++) {
+        var a = keywords[i], b = keywords[j];
+        if (norm(a.term) !== norm(b.term)) continue;
+
+        if (a.mode === 'not' !== (b.mode === 'not')) {
+          warnings.push('"' + a.term + '" está marcada como obligatoria/alguna y como excluida a la vez: la búsqueda no devolverá resultados.');
+        } else if (a.mode === b.mode) {
+          warnings.push('"' + a.term + '" está repetida en dos palabras clave.');
+        }
+      }
+    }
+
+    // Término excluido vs. frase exacta: aquí sí conviene la subcadena,
+    // porque es justo el caso que vacía los resultados en la práctica
+    // (excluir "virus" mientras la frase exacta es "antivirus corporativo").
+    if (phrase) {
+      var phraseNorm = norm(phrase);
+      keywords.forEach(function (k) {
+        if (k.mode === 'not' && phraseNorm.indexOf(norm(k.term)) !== -1) {
+          warnings.push('Excluyes "' + k.term + '" pero la frase exacta lo contiene: no habrá resultados.');
+        }
+      });
+    }
+
+    // site: y -site: con el mismo dominio se anulan entre sí.
+    if (site && excludeSite && norm(site) === norm(excludeSite)) {
+      warnings.push('Incluyes y excluyes el mismo sitio ("' + site + '"): no habrá resultados.');
+    }
+
+    return warnings;
   }
 
   /* ------------------------------------------------------------------
